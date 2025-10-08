@@ -3,6 +3,7 @@ using ceTe.DynamicPDF;
 using ceTe.DynamicPDF.PageElements.Forms;
 using ceTe.DynamicPDF.Text;
 using ceTe.DynamicPDF.PageElements;
+using System.Diagnostics;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +36,31 @@ app.MapPost(
         return Results.File(service.CreatePDF(title, content.content), "application/pdf", "document.pdf");
     })
     .WithName("CreatePDF");
+
+app.MapPost(
+    "/api/createpdfondisk",
+    (
+        [FromServices] IPDFService service,
+        [FromQuery] string title,
+        [FromBody] HtmlContent content,
+        [FromQuery] int count = 10,
+        [FromQuery] bool delete = false
+    ) =>
+    {
+        long startTime = Stopwatch.GetTimestamp();
+        int i = 0;
+        for (i = 0; i < count; i++)
+        {
+            File.WriteAllBytes($"c:\\tmp\\document{i}.pdf", service.CreatePDF(title, content.content));
+            if (delete)
+            {
+                File.Delete($"c:\\tmp\\document{i}.pdf");
+            }
+        }
+        TimeSpan elapsed = Stopwatch.GetElapsedTime(startTime);
+        return Results.Ok($"PDF created and deleted on disk {i} time(s) in {elapsed} seconds.");
+    })
+    .WithName("CreatePDFOnDisk");
 
 
 app.Run();
