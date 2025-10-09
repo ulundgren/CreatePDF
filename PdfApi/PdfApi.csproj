@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="ceTe.DynamicPDF.CoreSuite.NET" Version="12.37.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.9" />
+    <PackageReference Include="Select.Pdf.NetCore" Version="25.2.0" />
   </ItemGroup>
 
 </Project>

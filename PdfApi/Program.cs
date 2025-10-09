@@ -1,14 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
-using ceTe.DynamicPDF;
-using ceTe.DynamicPDF.PageElements.Forms;
-using ceTe.DynamicPDF.Text;
-using ceTe.DynamicPDF.PageElements;
+using PdfApi.DynamicPDF;
+using PdfApi.SelectPDF;
 using System.Diagnostics;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<IPDFService, PDFService>();
+builder.Services.AddSingleton<DynamicPDFService>();
+builder.Services.AddSingleton<SelectPDFService>();
+builder.Services.AddSingleton<Func<string, IPDFService>>(sp => key =>
+{
+    return key switch
+    {
+        "dynamic" => sp.GetRequiredService<DynamicPDFService>(),
+        "select" => sp.GetRequiredService<SelectPDFService>(),
+        _ => sp.GetRequiredService<DynamicPDFService>() // default
+    };
+});
+
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -28,30 +37,36 @@ app.UseHttpsRedirection();
 app.MapPost(
     "/api/createpdf",
     (
-        [FromServices] IPDFService service,
+        [FromServices] Func<string, IPDFService> pdfServiceFactory,
         [FromQuery] string title,
-        [FromBody] HtmlContent content
+        [FromBody] HtmlContent content,
+        [FromQuery] string type = "dynamic",
+        [FromQuery] string? baseUrl = null
     ) =>
     {
-        return Results.File(service.CreatePDF(title, content.content), "application/pdf", "document.pdf");
+        var service = pdfServiceFactory(type);
+        return Results.File(service.CreatePDF(content.content, baseUrl), "application/pdf", "document.pdf");
     })
     .WithName("CreatePDF");
 
 app.MapPost(
     "/api/createpdfondisk",
     (
-        [FromServices] IPDFService service,
+        [FromServices] Func<string, IPDFService> pdfServiceFactory,
         [FromQuery] string title,
         [FromBody] HtmlContent content,
         [FromQuery] int count = 10,
-        [FromQuery] bool delete = false
+        [FromQuery] bool delete = false,
+        [FromQuery] string type = "dynamic",
+        [FromQuery] string? baseUrl = null
     ) =>
     {
+        var service = pdfServiceFactory(type);
         long startTime = Stopwatch.GetTimestamp();
         int i = 0;
         for (i = 0; i < count; i++)
         {
-            File.WriteAllBytes($"c:\\tmp\\document{i}.pdf", service.CreatePDF(title, content.content));
+            File.WriteAllBytes($"c:\\tmp\\document{i}.pdf", service.CreatePDF(content.content, baseUrl));
             if (delete)
             {
                 File.Delete($"c:\\tmp\\document{i}.pdf");
@@ -71,42 +86,10 @@ public record HtmlContent(string content);
 
 public interface IPDFService
 {
-    byte[] CreatePDF(string title, string content);
+    byte[] CreatePDF(string content, string? baseUrl);
 }
 
-internal class PDFService : IPDFService
-{
-    public byte[] CreatePDF(string title, string content)
-    {
 
-        PageInfo layoutPage = new PageInfo(PageSize.A4, PageOrientation.Portrait);
-
-        HtmlLayout html = new(text: content, pageInfo: layoutPage);
-
-        html.Header.Center.Text = "<b><i>%%PR%%%%SP%% of %%ST%%</i></b>";
-        html.Header.Center.HasPageNumbers = true;
-        html.Header.Center.Width = 200;
-
-        html.Footer.Center.Text = "%%PR%%%%SP(A)%% of %%ST(B)%%";
-        html.Footer.Center.HasPageNumbers = true;
-        html.Footer.Center.Width = 200;
-
-        Document document = html.Layout();
-
-        Page page = document.Pages[0];
-        //Signature signature = new("signature", 50, 400, 450, 100);
-        //page.Elements.Add(signature);
-
-        GoogleFont googleFont = Font.Google("Roboto", false, false);
-        Label lbl = new Label("A Google Font (Roboto) Example.", 10, 200, 150, 50, googleFont, 22);
-        page.Elements.Add(lbl);
-
-        Certificate cert = new(@"uc-client.p12", "test");
-        document.Certify("signature", cert, CertifyingPermission.NoChangesAllowed);
-
-        return document.Draw();
-    }
-}
 
 
 public partial class Program { }
